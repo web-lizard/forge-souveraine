@@ -12,3 +12,9 @@ data/jobs/*
 !data/uploads/.gitkeep
 !data/outputs/.gitkeep
 !data/jobs/.gitkeep
+donnees/entrees/*
+donnees/sorties/*
+donnees/taches/*
+!donnees/entrees/.gitkeep
+!donnees/sorties/.gitkeep
+!donnees/taches/.gitkeep
