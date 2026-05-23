@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.DS_Store
+
+data/uploads/*
+data/outputs/*
+data/jobs/*
+!data/uploads/.gitkeep
+!data/outputs/.gitkeep
+!data/jobs/.gitkeep
