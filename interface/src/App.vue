@@ -6,9 +6,12 @@ const langue = ref('auto')
 const modele = ref('base')
 const styleSelectionne = ref('imperial')
 const journal = ref('Forge Souveraine prete. Choisis une video.')
+
 const adresseServeur = 'http://127.0.0.1:8787'
 const etatServeur = ref('verification')
 const messageServeur = ref('Connexion au serveur local...')
+const resultatTeleversement = ref(null)
+const forgeEnCours = ref(false)
 
 const nomFichier = computed(() => {
   return fichierChoisi.value ? fichierChoisi.value.name : 'Fichier non choisi'
@@ -24,23 +27,10 @@ const stylesDisponibles = [
 function choisirFichier(evenement) {
   const fichier = evenement.target.files && evenement.target.files[0]
   fichierChoisi.value = fichier || null
+  resultatTeleversement.value = null
   journal.value = fichier ? 'Fichier choisi: ' + fichier.name : 'Fichier annule.'
 }
 
-function lancerForge() {
-  if (!fichierChoisi.value) {
-    journal.value = 'Choisis une video.'
-    return
-  }
-
-  journal.value =
-    'Preparation locale...' + "\n" +
-    'Fichier: ' + fichierChoisi.value.name + "\n" +
-    'Langue: ' + langue.value + "\n" +
-    'Modele: ' + modele.value + "\n" +
-    'Style: ' + styleSelectionne.value + "\n\n" +
-    'Backend Python sera branche ensuite.'
-}
 async function verifierServeur() {
   try {
     const reponse = await fetch(adresseServeur + '/api/sante')
@@ -53,6 +43,53 @@ async function verifierServeur() {
   } catch (erreur) {
     etatServeur.value = 'hors-ligne'
     messageServeur.value = 'Backend hors ligne. Lance le serveur Python sur le port 8787.'
+  }
+}
+
+async function lancerForge() {
+  if (!fichierChoisi.value) {
+    journal.value = 'Choisis une video.'
+    return
+  }
+
+  forgeEnCours.value = true
+  resultatTeleversement.value = null
+
+  try {
+    journal.value =
+      'Televersement vers le backend local...' + "\n" +
+      'Fichier: ' + fichierChoisi.value.name + "\n" +
+      'Langue: ' + langue.value + "\n" +
+      'Modele: ' + modele.value + "\n" +
+      'Style: ' + styleSelectionne.value
+
+    const corps = new FormData()
+    corps.append('fichier', fichierChoisi.value)
+
+    const reponse = await fetch(adresseServeur + '/api/televerser', {
+      method: 'POST',
+      body: corps
+    })
+
+    if (!reponse.ok) {
+      const texteErreur = await reponse.text()
+      throw new Error(texteErreur)
+    }
+
+    const donnees = await reponse.json()
+    resultatTeleversement.value = donnees
+
+    journal.value =
+      'Fichier sauvegarde dans donnees/entrees.' + "\n" +
+      'Nom original: ' + donnees.nom_original + "\n" +
+      'Nom stocke: ' + donnees.nom_stocke + "\n" +
+      'Taille: ' + donnees.taille_octets + ' octets' + "\n\n" +
+      'Etape suivante: creer une tache de transcription.'
+
+  } catch (erreur) {
+    journal.value = 'Erreur pendant le televersement: ' + erreur.message
+  } finally {
+    forgeEnCours.value = false
   }
 }
 
@@ -69,6 +106,12 @@ onMounted(() => {
       <p class="accroche">
         Локальный генератор субтитров для Shorts: видео, транскрибация, SRT, ASS и будущий MP4-рендер.
       </p>
+    </section>
+
+    <section class="carte etat" :class="etatServeur">
+      <h2>Etat du serveur</h2>
+      <p>{{ messageServeur }}</p>
+      <button class="secondaire" @click="verifierServeur">Verifier encore</button>
     </section>
 
     <section class="carte">
@@ -112,15 +155,16 @@ onMounted(() => {
         </button>
       </div>
 
-      <button class="principal" @click="lancerForge">
-        Forger les sous-titres
+      <button class="principal" :disabled="forgeEnCours" @click="lancerForge">
+        {{ forgeEnCours ? 'Televersement...' : 'Forger les sous-titres' }}
       </button>
     </section>
 
-    <section class="carte etat" :class="etatServeur">
-      <h2>Etat du serveur</h2>
-      <p>{{ messageServeur }}</p>
-      <button class="secondaire" @click="verifierServeur">Verifier encore</button>
+    <section v-if="resultatTeleversement" class="carte succes">
+      <h2>Fichier local sauvegarde</h2>
+      <p><strong>Original:</strong> {{ resultatTeleversement.nom_original }}</p>
+      <p><strong>Stocke:</strong> {{ resultatTeleversement.nom_stocke }}</p>
+      <p><strong>Taille:</strong> {{ resultatTeleversement.taille_octets }} octets</p>
     </section>
 
     <section class="carte">
@@ -176,7 +220,9 @@ h2 {
   margin: 0 0 18px;
 }
 
-.accroche {
+.accroche,
+.etat p,
+.succes p {
   color: #aac8b7;
   font-size: 18px;
   line-height: 1.55;
@@ -228,7 +274,8 @@ select {
   margin-bottom: 18px;
 }
 
-.styles button {
+.styles button,
+.secondaire {
   padding: 10px 14px;
   color: #effff5;
   background: rgba(0, 0, 0, .22);
@@ -250,25 +297,19 @@ select {
   cursor: pointer;
 }
 
-.etat p {
-  margin: 0 0 14px;
-  color: #aac8b7;
+.principal:disabled {
+  opacity: .55;
+  cursor: progress;
 }
 
-.etat.pret {
+.etat.pret,
+.succes {
   border-color: rgba(125, 255, 178, .65);
 }
 
 .etat.hors-ligne,
 .etat.erreur {
   border-color: rgba(255, 125, 125, .65);
-}
-
-.secondaire {
-  padding: 10px 14px;
-  color: #effff5;
-  background: rgba(0, 0, 0, .22);
-  cursor: pointer;
 }
 
 pre {
@@ -281,4 +322,3 @@ pre {
   white-space: pre-wrap;
 }
 </style>
-
