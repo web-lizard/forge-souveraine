@@ -11,6 +11,7 @@ const adresseServeur = 'http://127.0.0.1:8787'
 const etatServeur = ref('verification')
 const messageServeur = ref('Connexion au serveur local...')
 const resultatTeleversement = ref(null)
+const resultatTache = ref(null)
 const forgeEnCours = ref(false)
 
 const nomFichier = computed(() => {
@@ -28,6 +29,7 @@ function choisirFichier(evenement) {
   const fichier = evenement.target.files && evenement.target.files[0]
   fichierChoisi.value = fichier || null
   resultatTeleversement.value = null
+  resultatTache.value = null
   journal.value = fichier ? 'Fichier choisi: ' + fichier.name : 'Fichier annule.'
 }
 
@@ -54,6 +56,7 @@ async function lancerForge() {
 
   forgeEnCours.value = true
   resultatTeleversement.value = null
+  resultatTache.value = null
 
   try {
     journal.value =
@@ -80,11 +83,37 @@ async function lancerForge() {
     resultatTeleversement.value = donnees
 
     journal.value =
-      'Fichier sauvegarde dans donnees/entrees.' + "\n" +
-      'Nom original: ' + donnees.nom_original + "\n" +
-      'Nom stocke: ' + donnees.nom_stocke + "\n" +
-      'Taille: ' + donnees.taille_octets + ' octets' + "\n\n" +
-      'Etape suivante: creer une tache de transcription.'
+      'Fichier sauvegarde. Creation de la tache...' + "\n" +
+      'Nom stocke: ' + donnees.nom_stocke
+
+    const reponseTache = await fetch(adresseServeur + '/api/taches/creer', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        nom_stocke: donnees.nom_stocke,
+        langue: langue.value,
+        modele: modele.value,
+        style: styleSelectionne.value
+      })
+    })
+
+    if (!reponseTache.ok) {
+      const texteErreurTache = await reponseTache.text()
+      throw new Error(texteErreurTache)
+    }
+
+    const tache = await reponseTache.json()
+    resultatTache.value = tache
+
+    journal.value =
+      'Tache creee.' + "\n" +
+      'ID: ' + tache.identifiant_tache + "\n" +
+      'Etat: ' + tache.etat + "\n" +
+      'Etape: ' + tache.etape + "\n" +
+      'Fichier: ' + tache.nom_stocke + "\n\n" +
+      'Etape suivante: brancher faster-whisper.'
 
   } catch (erreur) {
     journal.value = 'Erreur pendant le televersement: ' + erreur.message
@@ -165,6 +194,15 @@ onMounted(() => {
       <p><strong>Original:</strong> {{ resultatTeleversement.nom_original }}</p>
       <p><strong>Stocke:</strong> {{ resultatTeleversement.nom_stocke }}</p>
       <p><strong>Taille:</strong> {{ resultatTeleversement.taille_octets }} octets</p>
+    </section>
+
+    <section v-if="resultatTache" class="carte succes">
+      <h2>Tache de transcription</h2>
+      <p><strong>ID:</strong> {{ resultatTache.identifiant_tache }}</p>
+      <p><strong>Etat:</strong> {{ resultatTache.etat }}</p>
+      <p><strong>Etape:</strong> {{ resultatTache.etape }}</p>
+      <p><strong>Modele:</strong> {{ resultatTache.modele }}</p>
+      <p><strong>Style:</strong> {{ resultatTache.style }}</p>
     </section>
 
     <section class="carte">
