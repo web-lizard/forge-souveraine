@@ -1,11 +1,14 @@
 ﻿<script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 
 const fichierChoisi = ref(null)
 const langue = ref('auto')
 const modele = ref('base')
 const styleSelectionne = ref('imperial')
 const journal = ref('Forge Souveraine prete. Choisis une video.')
+const adresseServeur = 'http://127.0.0.1:8787'
+const etatServeur = ref('verification')
+const messageServeur = ref('Connexion au serveur local...')
 
 const nomFichier = computed(() => {
   return fichierChoisi.value ? fichierChoisi.value.name : 'Fichier non choisi'
@@ -38,6 +41,24 @@ function lancerForge() {
     'Style: ' + styleSelectionne.value + "\n\n" +
     'Backend Python sera branche ensuite.'
 }
+async function verifierServeur() {
+  try {
+    const reponse = await fetch(adresseServeur + '/api/sante')
+    const donnees = await reponse.json()
+
+    etatServeur.value = donnees.ok ? 'pret' : 'erreur'
+    messageServeur.value = donnees.ok
+      ? 'Backend pret: ' + donnees.nom
+      : 'Backend repond, mais etat inattendu.'
+  } catch (erreur) {
+    etatServeur.value = 'hors-ligne'
+    messageServeur.value = 'Backend hors ligne. Lance le serveur Python sur le port 8787.'
+  }
+}
+
+onMounted(() => {
+  verifierServeur()
+})
 </script>
 
 <template>
@@ -94,6 +115,12 @@ function lancerForge() {
       <button class="principal" @click="lancerForge">
         Forger les sous-titres
       </button>
+    </section>
+
+    <section class="carte etat" :class="etatServeur">
+      <h2>Etat du serveur</h2>
+      <p>{{ messageServeur }}</p>
+      <button class="secondaire" @click="verifierServeur">Verifier encore</button>
     </section>
 
     <section class="carte">
@@ -223,6 +250,27 @@ select {
   cursor: pointer;
 }
 
+.etat p {
+  margin: 0 0 14px;
+  color: #aac8b7;
+}
+
+.etat.pret {
+  border-color: rgba(125, 255, 178, .65);
+}
+
+.etat.hors-ligne,
+.etat.erreur {
+  border-color: rgba(255, 125, 125, .65);
+}
+
+.secondaire {
+  padding: 10px 14px;
+  color: #effff5;
+  background: rgba(0, 0, 0, .22);
+  cursor: pointer;
+}
+
 pre {
   min-height: 120px;
   margin: 0;
@@ -233,3 +281,4 @@ pre {
   white-space: pre-wrap;
 }
 </style>
+
