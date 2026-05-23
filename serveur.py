@@ -8,6 +8,9 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from noyau.transcription import transcrire_fichier
+from noyau.sous_titres import ecrire_ass, ecrire_srt
+
 
 RACINE = Path(__file__).resolve().parent
 DONNEES = RACINE / "donnees"
@@ -138,3 +141,65 @@ def lire_tache(identifiant_tache: str) -> dict:
         raise HTTPException(status_code=404, detail="Tache introuvable")
 
     return json.loads(chemin_tache.read_text(encoding="utf-8"))
+
+
+
+@application.post("/api/taches/{identifiant_tache}/executer")
+def executer_tache(identifiant_tache: str) -> dict:
+    identifiant_sur = Path(identifiant_tache).stem
+    chemin_tache = TACHES / f"{identifiant_sur}.json"
+
+    if not chemin_tache.exists():
+        raise HTTPException(status_code=404, detail="Tache introuvable")
+
+    tache = json.loads(chemin_tache.read_text(encoding="utf-8"))
+    tache["etat"] = "en_cours"
+    tache["etape"] = "transcription"
+    tache["mis_a_jour_a"] = datetime.now(timezone.utc).isoformat()
+    chemin_tache.write_text(json.dumps(tache, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    chemin_entree = ENTREES / Path(tache["nom_stocke"]).name
+
+    try:
+        resultat = transcrire_fichier(
+            chemin_entree=chemin_entree,
+            langue=tache.get("langue", "auto"),
+            modele=tache.get("modele", "base"),
+        )
+
+        base_sortie = f"{identifiant_sur}_{chemin_entree.stem}"
+        chemin_json = SORTIES / f"{base_sortie}.json"
+        chemin_srt = SORTIES / f"{base_sortie}.srt"
+        chemin_ass = SORTIES / f"{base_sortie}.ass"
+
+        chemin_json.write_text(
+            json.dumps(resultat, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        ecrire_srt(resultat["segments"], chemin_srt)
+        ecrire_ass(resultat["segments"], chemin_ass)
+
+        tache["etat"] = "terminee"
+        tache["etape"] = "sorties_pretes"
+        tache["langue_detectee"] = resultat.get("langue")
+        tache["duree"] = resultat.get("duree")
+        tache["segments"] = len(resultat.get("segments", []))
+        tache["sorties"] = {
+            "json": chemin_json.name,
+            "srt": chemin_srt.name,
+            "ass": chemin_ass.name,
+        }
+        tache["mis_a_jour_a"] = datetime.now(timezone.utc).isoformat()
+
+    except Exception as erreur:
+        tache["etat"] = "erreur"
+        tache["etape"] = "transcription_erreur"
+        tache["erreur"] = str(erreur)
+        tache["mis_a_jour_a"] = datetime.now(timezone.utc).isoformat()
+
+    chemin_tache.write_text(
+        json.dumps(tache, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    return tache
