@@ -21,6 +21,8 @@ const listeSorties = ref([])
 const dossierSorties = ref('')
 const exporterTechniques = ref(false)
 const exporterMontage = ref(true)
+const demarrageAuto = ref(false)
+const modeTraitement = ref('video')
 const forgeEnCours = ref(false)
 const erreurInterface = ref('')
 const journal = ref('Forge Souveraine attend un fichier.')
@@ -106,6 +108,14 @@ const textes = {
     timelineCsv: 'TIMELINE CSV',
     montageMd: 'MONTAGE MD',
     progression: 'Progression',
+    demarrageAuto: 'Lancer automatiquement apres depot',
+    modeTraitement: 'Mode de traitement',
+    modeVideo: 'Video MP4 finale',
+    modeSousTitres: 'Sous-titres et carte, sans MP4',
+    modeTimeline: 'Carte de montage seule',
+    dropManualHint: 'depose: regle puis lance',
+    dropAutoHint: 'depose: lancement automatique',
+    pretLancer: 'Fichier pret. Change les reglages puis lance.',
     historique: 'Historique',
     aucunHistorique: 'Aucun fichier encore.',
     ouvrir: 'Ouvrir',
@@ -191,6 +201,14 @@ const textes = {
     timelineCsv: 'ТАЙМЛАЙН CSV',
     montageMd: 'МОНТАЖ MD',
     progression: 'Прогресс',
+    demarrageAuto: 'Запускать сразу после вброса',
+    modeTraitement: 'Режим обработки',
+    modeVideo: 'Финальное MP4-видео',
+    modeSousTitres: 'Субтитры и карта, без MP4',
+    modeTimeline: 'Только монтажная карта',
+    dropManualHint: 'отпусти: настрой и нажми запуск',
+    dropAutoHint: 'отпусти: запуск сразу',
+    pretLancer: 'Файл готов. Можно поменять настройки и запустить.',
     historique: 'История',
     aucunHistorique: 'Пока файлов нет.',
     ouvrir: 'Открыть',
@@ -295,7 +313,7 @@ async function chargerSorties() {
 }
 
 async function exporterTimeline(execution) {
-  if (!exporterMontage.value || !execution?.sorties?.json) {
+  if ((!exporterMontage.value && modeTraitement.value !== 'timeline') || !execution?.sorties?.json) {
     return execution
   }
 
@@ -371,7 +389,7 @@ async function finaliserSorties(execution) {
       body: JSON.stringify({
         sorties: execution?.sorties || {},
         nom_original: fichierSelectionne.value?.name || '',
-        exporter_techniques: exporterTechniques.value
+        exporter_techniques: exporterTechniques.value || modeTraitement.value === 'sous_titres'
       })
     })
 
@@ -504,7 +522,13 @@ async function gererDrop(evenement) {
 
   if (fichier) {
     definirFichier(fichier)
-    await forgerSousTitres()
+
+    if (demarrageAuto.value) {
+      await forgerSousTitres()
+    } else {
+      tiroir.value = 'reglages'
+      journal.value = t('pretLancer')
+    }
   }
 }
 
@@ -593,7 +617,14 @@ async function forgerSousTitres() {
     resultatExecution.value = execution
     resultatTache.value = execution
 
-    if (execution.etat === 'terminee' && entreeEstVideo(tache.nom_stocke)) {
+    if (execution.etat === 'terminee' && modeTraitement.value !== 'video') {
+      execution = await exporterTimeline(execution)
+      execution = await finaliserSorties(execution)
+      resultatExecution.value = execution
+      resultatTache.value = execution
+    }
+
+    if (execution.etat === 'terminee' && entreeEstVideo(tache.nom_stocke) && modeTraitement.value === 'video') {
       phase.value = 'rendu'
       journal.value =
         t('renduEnCours') + '\n' +
@@ -622,6 +653,7 @@ async function forgerSousTitres() {
       await chargerSorties()
       journal.value =
         t('termine') + '\n' +
+        'Mode: ' + modeTraitement.value + '\n' +
         'Segments: ' + execution.segments + '\n' +
         'Langue: ' + execution.langue_detectee + '\n' +
         'SRT: ' + execution.sorties.srt + '\n' +
@@ -728,7 +760,7 @@ onMounted(() => {
 
         <button class="drop-callout" type="button" @click="document.getElementById('entree-fichier')?.click()">
           <strong>{{ t('dropCall') }}</strong>
-          <span>{{ t('dropHint') }}</span>
+          <span>{{ demarrageAuto ? t('dropAutoHint') : t('dropManualHint') }}</span>
         </button>
       </div>
 
@@ -809,6 +841,18 @@ onMounted(() => {
           <option value="shorts_red">{{ t('styleRed') }}</option>
           <option value="shorts_soft">{{ t('styleSoft') }}</option>
         </select>
+
+        <label>{{ t('modeTraitement') }}</label>
+        <select v-model="modeTraitement">
+          <option value="video">{{ t('modeVideo') }}</option>
+          <option value="sous_titres">{{ t('modeSousTitres') }}</option>
+          <option value="timeline">{{ t('modeTimeline') }}</option>
+        </select>
+
+        <label class="check-row">
+          <input type="checkbox" v-model="demarrageAuto" />
+          <span>{{ t('demarrageAuto') }}</span>
+        </label>
 
         <label class="check-row">
           <input type="checkbox" v-model="exporterMontage" />
