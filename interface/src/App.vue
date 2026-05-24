@@ -9,6 +9,7 @@ const modele = ref('tiny')
 const styleSelectionne = ref('imperial')
 const tiroir = ref('')
 const phase = ref('idle')
+const survolDepot = ref(false)
 
 const etatServeur = ref('verification')
 const infosServeur = ref(null)
@@ -36,6 +37,8 @@ const textes = {
     journal: 'Journal',
     aucun: 'Aucun fichier',
     deposer: 'Choisis une video ou un audio',
+    dropCall: 'Glisse le fichier ici',
+    dropHint: 'ou clique sur le reacteur',
     pret: 'Pret a forger',
     megaIdle: 'CHOISIR',
     megaReady: 'FORGER',
@@ -101,6 +104,8 @@ const textes = {
     journal: 'Журнал',
     aucun: 'Файл не выбран',
     deposer: 'Выбери видео или аудио',
+    dropCall: 'Брось файл сюда',
+    dropHint: 'или нажми на реактор',
     pret: 'Готово к ковке',
     megaIdle: 'ВЫБРАТЬ',
     megaReady: 'КОВАТЬ',
@@ -283,9 +288,7 @@ async function verifierServeur() {
   }
 }
 
-function choisirFichier(evenement) {
-  const fichier = evenement.target.files?.[0] || null
-
+function definirFichier(fichier) {
   fichierSelectionne.value = fichier
   resultatTeleversement.value = null
   resultatTache.value = null
@@ -296,6 +299,34 @@ function choisirFichier(evenement) {
   journal.value = fichier
     ? t('fichier') + ': ' + fichier.name + ' (' + formatOctets(fichier.size) + ')'
     : t('aucun')
+}
+
+function choisirFichier(evenement) {
+  definirFichier(evenement.target.files?.[0] || null)
+}
+
+function gererDragEnter() {
+  survolDepot.value = true
+}
+
+function gererDragOver() {
+  survolDepot.value = true
+}
+
+function gererDragLeave(evenement) {
+  if (!evenement.currentTarget.contains(evenement.relatedTarget)) {
+    survolDepot.value = false
+  }
+}
+
+function gererDrop(evenement) {
+  survolDepot.value = false
+
+  const fichier = evenement.dataTransfer?.files?.[0] || null
+
+  if (fichier) {
+    definirFichier(fichier)
+  }
 }
 
 function clickMega() {
@@ -438,7 +469,14 @@ onMounted(() => {
 </script>
 
 <template>
-  <main class="cockpit">
+  <main
+    class="cockpit"
+    :class="{ drag: survolDepot }"
+    @dragenter.prevent="gererDragEnter"
+    @dragover.prevent="gererDragOver"
+    @dragleave.prevent="gererDragLeave"
+    @drop.prevent="gererDrop"
+  >
     <input
       id="entree-fichier"
       class="fichier-cache"
@@ -446,6 +484,12 @@ onMounted(() => {
       accept=".mp4,.mov,.mkv,.webm,.m4v,.mp3,.wav,.m4a"
       @change="choisirFichier"
     />
+
+    <div class="drop-overlay" :class="{ visible: survolDepot }">
+      <div class="drop-sigil">⬇</div>
+      <strong>{{ t('dropCall') }}</strong>
+      <span>{{ t('megaHintIdle') }}</span>
+    </div>
 
     <aside class="rail">
       <button class="sigil" type="button" @click="changerTiroir('pipeline')">FS</button>
@@ -494,6 +538,11 @@ onMounted(() => {
             <strong>{{ megaTexte }}</strong>
             <em>{{ megaIndice }}</em>
           </span>
+        </button>
+
+        <button class="drop-callout" type="button" @click="document.getElementById('entree-fichier')?.click()">
+          <strong>{{ t('dropCall') }}</strong>
+          <span>{{ t('dropHint') }}</span>
         </button>
       </div>
 
@@ -644,6 +693,107 @@ select {
 .fichier-cache {
   display: none;
 }
+
+.drop-overlay {
+  z-index: 100;
+  position: fixed;
+  inset: 18px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 14px;
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(0.98);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  border: 2px dashed rgba(125, 255, 178, 0.74);
+  border-radius: 34px;
+  background:
+    radial-gradient(circle at center, rgba(125, 255, 178, 0.18), transparent 42%),
+    rgba(2, 10, 5, 0.86);
+  box-shadow:
+    inset 0 0 80px rgba(125, 255, 178, 0.1),
+    0 0 90px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  text-align: center;
+}
+
+.drop-overlay.visible {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.drop-overlay strong {
+  color: #fff8d6;
+  font-size: clamp(34px, 6vw, 86px);
+  font-weight: 1000;
+  letter-spacing: -0.06em;
+  text-transform: uppercase;
+}
+
+.drop-overlay span {
+  color: #d9edc8;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.drop-sigil {
+  display: grid;
+  width: 92px;
+  height: 92px;
+  place-items: center;
+  border-radius: 28px;
+  color: #041107;
+  background: linear-gradient(135deg, #d6b218, #7dffb2);
+  box-shadow: 0 0 54px rgba(125, 255, 178, 0.25);
+  font-size: 44px;
+  font-weight: 1000;
+}
+
+.cockpit.drag .mega {
+  filter: saturate(1.35) brightness(1.08);
+  box-shadow:
+    0 0 110px rgba(125, 255, 178, 0.28),
+    0 0 190px rgba(214, 178, 24, 0.18);
+}
+
+.cockpit.drag .scene::before {
+  opacity: 1;
+}
+
+.drop-callout {
+  z-index: 3;
+  position: absolute;
+  left: 50%;
+  bottom: clamp(132px, 14vh, 170px);
+  display: grid;
+  gap: 4px;
+  min-width: 260px;
+  transform: translateX(-50%);
+  cursor: pointer;
+  border: 1px solid rgba(214, 178, 24, 0.32);
+  border-radius: 999px;
+  padding: 12px 18px;
+  color: #fff8d6;
+  background:
+    linear-gradient(135deg, rgba(214, 178, 24, 0.16), rgba(125, 255, 178, 0.12)),
+    rgba(2, 8, 4, 0.78);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+  text-align: center;
+}
+
+.drop-callout strong {
+  font-size: 15px;
+  font-weight: 1000;
+  text-transform: uppercase;
+}
+
+.drop-callout span {
+  color: #9fb79e;
+  font-size: 12px;
+  font-weight: 850;
+}
+
 
 .rail {
   z-index: 20;
