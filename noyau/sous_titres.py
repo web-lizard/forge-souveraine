@@ -8,8 +8,8 @@ from typing import Any, Iterable
 
 STYLE_PRESETS = {
     "shorts_clean": {
-        "font": "Arial",
-        "font_size": 70,
+        "font": "Segoe UI Semibold",
+        "font_size": 66,
         "primary": "&H00FFFFFF",
         "outline": "&H00000000",
         "shadow": "&HAA000000",
@@ -20,8 +20,8 @@ STYLE_PRESETS = {
         "words_per_line": 3,
     },
     "shorts_gold": {
-        "font": "Arial",
-        "font_size": 70,
+        "font": "Segoe UI Black",
+        "font_size": 66,
         "primary": "&H0018B2D6",
         "outline": "&H00000000",
         "shadow": "&HAA000000",
@@ -32,8 +32,8 @@ STYLE_PRESETS = {
         "words_per_line": 3,
     },
     "shorts_big": {
-        "font": "Arial",
-        "font_size": 82,
+        "font": "Segoe UI Black",
+        "font_size": 76,
         "primary": "&H00FFFFFF",
         "outline": "&H00000000",
         "shadow": "&HAA000000",
@@ -44,8 +44,8 @@ STYLE_PRESETS = {
         "words_per_line": 3,
     },
     "shorts_red": {
-        "font": "Arial",
-        "font_size": 68,
+        "font": "Arial Black",
+        "font_size": 64,
         "primary": "&H002222FF",
         "outline": "&H00FFFFFF",
         "shadow": "&HAA000000",
@@ -55,9 +55,21 @@ STYLE_PRESETS = {
         "words_per_caption": 5,
         "words_per_line": 3,
     },
+    "shorts_soft": {
+        "font": "Arial Rounded MT Bold",
+        "font_size": 66,
+        "primary": "&H00FFFFFF",
+        "outline": "&H00000000",
+        "shadow": "&HAA000000",
+        "outline_size": 4,
+        "shadow_size": 1,
+        "margin_v": 245,
+        "words_per_caption": 6,
+        "words_per_line": 3,
+    },
     "imperial": {
-        "font": "Arial",
-        "font_size": 70,
+        "font": "Segoe UI Black",
+        "font_size": 66,
         "primary": "&H0018B2D6",
         "outline": "&H00000000",
         "shadow": "&HAA000000",

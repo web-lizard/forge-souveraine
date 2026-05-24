@@ -58,7 +58,8 @@ const textes = {
     styleGold: 'Imperial gold',
     styleBig: 'Large lisible',
     styleRed: 'Rouge classique',
-    qualiteNote: 'tiny est rapide mais faible. small est le defaut conseille.',
+    styleSoft: 'Soft rounded',
+    qualiteNote: 'tiny est rapide mais faible. small est le defaut conseille. Les styles utilisent des polices systeme Windows.',
     auto: 'Auto',
     russe: 'Russe',
     francais: 'Francais',
@@ -135,7 +136,8 @@ const textes = {
     styleGold: 'Имперское золото',
     styleBig: 'Крупный читаемый',
     styleRed: 'Красный классический',
-    qualiteNote: 'tiny быстрый, но слабый. small теперь рекомендуемый дефолт.',
+    styleSoft: 'Мягкий округлый',
+    qualiteNote: 'tiny быстрый, но слабый. small теперь рекомендуемый дефолт. Стили используют системные шрифты Windows.',
     auto: 'Авто',
     russe: 'Русский',
     francais: 'Французский',
@@ -681,6 +683,7 @@ onMounted(() => {
           <option value="shorts_gold">{{ t('styleGold') }}</option>
           <option value="shorts_big">{{ t('styleBig') }}</option>
           <option value="shorts_red">{{ t('styleRed') }}</option>
+          <option value="shorts_soft">{{ t('styleSoft') }}</option>
         </select>
 
         <p class="note">{{ t('local') }}</p>
