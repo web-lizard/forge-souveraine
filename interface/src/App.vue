@@ -38,7 +38,7 @@ const textes = {
     aucun: 'Aucun fichier',
     deposer: 'Choisis une video ou un audio',
     dropCall: 'Glisse le fichier ici',
-    dropHint: 'ou clique sur le reacteur',
+    dropHint: 'depose: lancement automatique',
     pret: 'Pret a forger',
     megaIdle: 'CHOISIR',
     megaReady: 'FORGER',
@@ -105,7 +105,7 @@ const textes = {
     aucun: 'Файл не выбран',
     deposer: 'Выбери видео или аудио',
     dropCall: 'Брось файл сюда',
-    dropHint: 'или нажми на реактор',
+    dropHint: 'отпусти: запуск сразу',
     pret: 'Готово к ковке',
     megaIdle: 'ВЫБРАТЬ',
     megaReady: 'КОВАТЬ',
@@ -319,13 +319,18 @@ function gererDragLeave(evenement) {
   }
 }
 
-function gererDrop(evenement) {
+async function gererDrop(evenement) {
   survolDepot.value = false
+
+  if (forgeEnCours.value) {
+    return
+  }
 
   const fichier = evenement.dataTransfer?.files?.[0] || null
 
   if (fichier) {
     definirFichier(fichier)
+    await forgerSousTitres()
   }
 }
 
