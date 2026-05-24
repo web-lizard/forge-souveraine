@@ -7,7 +7,7 @@ const langueInterface = ref('fr')
 const langue = ref('ru')
 const modele = ref('tiny')
 const styleSelectionne = ref('imperial')
-const tiroir = ref('pipeline')
+const tiroir = ref('')
 const phase = ref('idle')
 
 const etatServeur = ref('verification')
@@ -606,12 +606,19 @@ onMounted(() => {
   box-sizing: border-box;
 }
 
-:global(body) {
+:global(html),
+:global(body),
+:global(#app) {
   margin: 0;
-  width: 100vw;
-  min-width: 320px;
-  min-height: 100vh;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
   overflow: hidden;
+}
+
+:global(body) {
+  min-width: 320px;
   background:
     radial-gradient(circle at 48% 42%, rgba(214, 178, 24, 0.14), transparent 26%),
     radial-gradient(circle at 52% 48%, rgba(125, 255, 178, 0.11), transparent 32%),
@@ -628,9 +635,9 @@ select {
 .cockpit {
   position: relative;
   display: grid;
-  grid-template-columns: 74px 1fr;
-  width: 100vw;
-  height: 100vh;
+  grid-template-columns: 74px minmax(0, 1fr);
+  width: 100%;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -697,7 +704,7 @@ select {
   display: grid;
   grid-template-rows: auto 1fr auto auto;
   min-width: 0;
-  height: 100vh;
+  height: 100dvh;
   padding: 18px 22px 20px;
   overflow: hidden;
 }
@@ -800,7 +807,7 @@ select {
 
 .orbites {
   position: absolute;
-  width: min(58vw, 650px);
+  width: min(52vw, 600px);
   aspect-ratio: 1;
   pointer-events: none;
   opacity: 0.72;
@@ -864,8 +871,8 @@ select {
 .mega {
   position: relative;
   display: grid;
-  width: min(44vw, 460px);
-  min-width: 310px;
+  width: min(38vw, 420px);
+  min-width: 300px;
   aspect-ratio: 1;
   place-items: center;
   cursor: pointer;
