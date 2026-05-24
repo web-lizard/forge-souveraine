@@ -12,6 +12,7 @@ const etatServeur = ref('verification')
 const messageServeur = ref('Connexion au serveur local...')
 const resultatTeleversement = ref(null)
 const resultatTache = ref(null)
+const resultatExecution = ref(null)
 const forgeEnCours = ref(false)
 
 const nomFichier = computed(() => {
@@ -30,6 +31,7 @@ function choisirFichier(evenement) {
   fichierChoisi.value = fichier || null
   resultatTeleversement.value = null
   resultatTache.value = null
+  resultatExecution.value = null
   journal.value = fichier ? 'Fichier choisi: ' + fichier.name : 'Fichier annule.'
 }
 
@@ -57,6 +59,7 @@ async function lancerForge() {
   forgeEnCours.value = true
   resultatTeleversement.value = null
   resultatTache.value = null
+  resultatExecution.value = null
 
   try {
     journal.value =
@@ -108,18 +111,50 @@ async function lancerForge() {
     resultatTache.value = tache
 
     journal.value =
-      'Tache creee.' + "\n" +
+      'Tache creee. Transcription en cours...' + "\n" +
       'ID: ' + tache.identifiant_tache + "\n" +
-      'Etat: ' + tache.etat + "\n" +
-      'Etape: ' + tache.etape + "\n" +
       'Fichier: ' + tache.nom_stocke + "\n\n" +
-      'Etape suivante: brancher faster-whisper.'
+      'Premier lancement peut telecharger le modele Whisper.'
+
+    const reponseExecution = await fetch(
+      adresseServeur + '/api/taches/' + tache.identifiant_tache + '/executer',
+      { method: 'POST' }
+    )
+
+    if (!reponseExecution.ok) {
+      const texteErreurExecution = await reponseExecution.text()
+      throw new Error(texteErreurExecution)
+    }
+
+    const execution = await reponseExecution.json()
+    resultatExecution.value = execution
+    resultatTache.value = execution
+
+    if (execution.etat === 'terminee') {
+      journal.value =
+        'Transcription terminee.' + "\n" +
+        'Segments: ' + execution.segments + "\n" +
+        'Langue detectee: ' + execution.langue_detectee + "\n" +
+        'SRT: ' + execution.sorties.srt + "\n" +
+        'ASS: ' + execution.sorties.ass + "\n" +
+        'JSON: ' + execution.sorties.json
+    } else {
+      journal.value =
+        'La tache est terminee avec probleme.' + "\n" +
+        'Etat: ' + execution.etat + "\n" +
+        'Etape: ' + execution.etape + "\n" +
+        'Erreur: ' + (execution.erreur || 'inconnue')
+    }
 
   } catch (erreur) {
     journal.value = 'Erreur pendant le televersement: ' + erreur.message
   } finally {
     forgeEnCours.value = false
   }
+}
+
+function lienSortie(nomFichier) {
+  return adresseServeur + '/api/sorties/' + encodeURIComponent(nomFichier)
 }
 
 onMounted(() => {
@@ -203,6 +238,15 @@ onMounted(() => {
       <p><strong>Etape:</strong> {{ resultatTache.etape }}</p>
       <p><strong>Modele:</strong> {{ resultatTache.modele }}</p>
       <p><strong>Style:</strong> {{ resultatTache.style }}</p>
+    </section>
+
+    <section v-if="resultatExecution && resultatExecution.sorties" class="carte succes">
+      <h2>Sorties pretes</h2>
+      <div class="telechargements">
+        <a :href="lienSortie(resultatExecution.sorties.srt)" target="_blank">Telecharger SRT</a>
+        <a :href="lienSortie(resultatExecution.sorties.ass)" target="_blank">Telecharger ASS</a>
+        <a :href="lienSortie(resultatExecution.sorties.json)" target="_blank">Telecharger JSON</a>
+      </div>
     </section>
 
     <section class="carte">
@@ -348,6 +392,22 @@ select {
 .etat.hors-ligne,
 .etat.erreur {
   border-color: rgba(255, 125, 125, .65);
+}
+
+.telechargements {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.telechargements a {
+  display: inline-flex;
+  padding: 10px 14px;
+  border-radius: 999px;
+  color: #031107;
+  background: linear-gradient(135deg, #d6b218, #7dffb2);
+  font-weight: 900;
+  text-decoration: none;
 }
 
 pre {

@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from noyau.transcription import transcrire_fichier
@@ -203,3 +204,18 @@ def executer_tache(identifiant_tache: str) -> dict:
     )
 
     return tache
+
+
+
+@application.get("/api/sorties/{nom_fichier}")
+def telecharger_sortie(nom_fichier: str) -> FileResponse:
+    nom_sur = Path(nom_fichier).name
+    chemin_sortie = SORTIES / nom_sur
+
+    if not chemin_sortie.exists():
+        raise HTTPException(status_code=404, detail="Sortie introuvable")
+
+    return FileResponse(
+        chemin_sortie,
+        filename=nom_sur,
+    )
