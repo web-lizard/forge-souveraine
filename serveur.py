@@ -1,4 +1,7 @@
 ﻿from pathlib import Path
+import os
+import subprocess
+import sys
 import json
 import shutil
 import uuid
@@ -17,7 +20,7 @@ from noyau.rendu import rendre_video
 RACINE = Path(__file__).resolve().parent
 DONNEES = RACINE / "donnees"
 ENTREES = DONNEES / "entrees"
-SORTIES = DONNEES / "sorties"
+SORTIES = Path(os.environ.get("FORGE_SORTIES_DIR", r"D:\ForgeSouveraine\sorties"))
 TACHES = DONNEES / "taches"
 
 EXTENSIONS_VIDEO = {'.mp4', '.mov', '.mkv', '.webm', '.m4v'}
@@ -295,3 +298,49 @@ def rendre_tache(identifiant_tache: str) -> dict:
     )
 
     return tache
+
+
+
+@application.get("/api/sorties")
+def lister_sorties() -> dict:
+    fichiers = []
+
+    SORTIES.mkdir(parents=True, exist_ok=True)
+
+    for chemin in sorted(SORTIES.glob("*"), key=lambda item: item.stat().st_mtime, reverse=True):
+        if not chemin.is_file():
+            continue
+
+        stat = chemin.stat()
+
+        fichiers.append(
+            {
+                "nom": chemin.name,
+                "extension": chemin.suffix.lower().lstrip("."),
+                "taille_octets": stat.st_size,
+                "modifie_a": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
+            }
+        )
+
+    return {
+        "ok": True,
+        "dossier": str(SORTIES),
+        "fichiers": fichiers[:300],
+    }
+
+
+@application.post("/api/sorties/ouvrir")
+def ouvrir_dossier_sorties() -> dict:
+    SORTIES.mkdir(parents=True, exist_ok=True)
+
+    if sys.platform.startswith("win"):
+        os.startfile(str(SORTIES))
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", str(SORTIES)])
+    else:
+        subprocess.Popen(["xdg-open", str(SORTIES)])
+
+    return {
+        "ok": True,
+        "dossier": str(SORTIES),
+    }

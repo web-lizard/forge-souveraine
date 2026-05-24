@@ -17,6 +17,8 @@ const fichierSelectionne = ref(null)
 const resultatTeleversement = ref(null)
 const resultatTache = ref(null)
 const resultatExecution = ref(null)
+const listeSorties = ref([])
+const dossierSorties = ref('')
 const forgeEnCours = ref(false)
 const erreurInterface = ref('')
 const journal = ref('Forge Souveraine attend un fichier.')
@@ -86,6 +88,11 @@ const textes = {
     termine: 'Forge terminee.',
     probleme: 'Probleme dans la forge.',
     aucunResultat: 'Les fichiers apparaitront ici.',
+    dossierSorties: 'Dossier de sortie',
+    ouvrirDossier: 'Ouvrir le dossier',
+    actualiser: 'Actualiser',
+    historique: 'Historique',
+    aucunHistorique: 'Aucun fichier encore.',
     ouvrir: 'Ouvrir',
     fermer: 'Fermer'
   },
@@ -153,6 +160,11 @@ const textes = {
     termine: 'Кузница завершила работу.',
     probleme: 'Проблема в кузнице.',
     aucunResultat: 'Файлы появятся здесь.',
+    dossierSorties: 'Папка результатов',
+    ouvrirDossier: 'Открыть папку',
+    actualiser: 'Обновить',
+    historique: 'История',
+    aucunHistorique: 'Пока файлов нет.',
     ouvrir: 'Открыть',
     fermer: 'Закрыть'
   }
@@ -215,6 +227,38 @@ function entreeEstVideo(nom) {
 
 function lienSortie(nomFichierSortie) {
   return adresseServeur + '/api/sorties/' + encodeURIComponent(nomFichierSortie)
+}
+
+async function chargerSorties() {
+  try {
+    const reponse = await fetch(adresseServeur + '/api/sorties')
+
+    if (!reponse.ok) {
+      throw new Error('Sorties HTTP ' + reponse.status)
+    }
+
+    const donnees = await reponse.json()
+    listeSorties.value = donnees.fichiers || []
+    dossierSorties.value = donnees.dossier || ''
+  } catch (erreur) {
+    journal.value = t('erreur') + ': ' + erreur.message
+  }
+}
+
+async function ouvrirDossierSorties() {
+  try {
+    const reponse = await fetch(adresseServeur + '/api/sorties/ouvrir', {
+      method: 'POST'
+    })
+
+    if (!reponse.ok) {
+      throw new Error('Open folder HTTP ' + reponse.status)
+    }
+
+    await chargerSorties()
+  } catch (erreur) {
+    journal.value = t('erreur') + ': ' + erreur.message
+  }
 }
 
 function changerTiroir(nom) {
@@ -443,6 +487,7 @@ async function forgerSousTitres() {
     if (execution.etat === 'terminee') {
       phase.value = 'done'
       tiroir.value = 'resultats'
+      await chargerSorties()
       journal.value =
         t('termine') + '\n' +
         'Segments: ' + execution.segments + '\n' +
@@ -470,6 +515,7 @@ async function forgerSousTitres() {
 
 onMounted(() => {
   verifierServeur()
+  chargerSorties()
 })
 </script>
 
@@ -627,13 +673,40 @@ onMounted(() => {
       </section>
 
       <section v-else-if="tiroir === 'resultats'" class="panneau">
+        <div class="sorties-actions">
+          <button type="button" @click="ouvrirDossierSorties">{{ t('ouvrirDossier') }}</button>
+          <button type="button" @click="chargerSorties">{{ t('actualiser') }}</button>
+        </div>
+
+        <div class="detail chemin-sorties">
+          <span>{{ t('dossierSorties') }}</span>
+          <strong>{{ dossierSorties || 'D:\ForgeSouveraine\sorties' }}</strong>
+        </div>
+
         <div v-if="resultatExecution?.sorties" class="downloads">
           <a :href="lienSortie(resultatExecution.sorties.srt)" target="_blank">{{ t('telechargerSrt') }}</a>
           <a :href="lienSortie(resultatExecution.sorties.ass)" target="_blank">{{ t('telechargerAss') }}</a>
           <a :href="lienSortie(resultatExecution.sorties.json)" target="_blank">{{ t('telechargerJson') }}</a>
           <a v-if="resultatExecution.sorties.mp4" :href="lienSortie(resultatExecution.sorties.mp4)" target="_blank">{{ t('telechargerMp4') }}</a>
         </div>
+
         <p v-else class="note">{{ t('aucunResultat') }}</p>
+
+        <h3 class="mini-title">{{ t('historique') }}</h3>
+
+        <div v-if="listeSorties.length" class="historique-sorties">
+          <a
+            v-for="fichier in listeSorties"
+            :key="fichier.nom"
+            :href="lienSortie(fichier.nom)"
+            target="_blank"
+          >
+            <strong>{{ fichier.nom }}</strong>
+            <span>{{ fichier.extension.toUpperCase() }} · {{ formatOctets(fichier.taille_octets) }}</span>
+          </a>
+        </div>
+
+        <p v-else class="note">{{ t('aucunHistorique') }}</p>
       </section>
 
       <section v-else-if="tiroir === 'journal'" class="panneau">
@@ -1341,6 +1414,74 @@ pre {
   color: #d9edc8;
   background: #020604;
   line-height: 1.5;
+}
+
+
+.sorties-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.sorties-actions button {
+  cursor: pointer;
+  border: 1px solid rgba(214, 178, 24, 0.28);
+  border-radius: 16px;
+  padding: 11px 12px;
+  color: #041107;
+  background: linear-gradient(135deg, #d6b218, #7dffb2);
+  font-weight: 950;
+}
+
+.chemin-sorties strong {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.mini-title {
+  margin: 18px 0 10px;
+  color: #fff8d6;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.historique-sorties {
+  display: grid;
+  gap: 8px;
+  max-height: 44vh;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.historique-sorties a {
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(125, 255, 178, 0.13);
+  border-radius: 14px;
+  padding: 10px 11px;
+  color: #fff8d6;
+  background: rgba(0, 0, 0, 0.22);
+  text-decoration: none;
+}
+
+.historique-sorties a:hover {
+  border-color: rgba(214, 178, 24, 0.5);
+  background: rgba(214, 178, 24, 0.08);
+}
+
+.historique-sorties strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.historique-sorties span {
+  color: #9fb79e;
+  font-size: 12px;
+  font-weight: 850;
 }
 
 @keyframes spin {
