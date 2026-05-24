@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from noyau.transcription import transcrire_fichier
 from noyau.sous_titres import ecrire_ass, ecrire_srt
+from noyau.rendu import rendre_video
 
 
 RACINE = Path(__file__).resolve().parent
@@ -18,6 +19,9 @@ DONNEES = RACINE / "donnees"
 ENTREES = DONNEES / "entrees"
 SORTIES = DONNEES / "sorties"
 TACHES = DONNEES / "taches"
+
+EXTENSIONS_VIDEO = {'.mp4', '.mov', '.mkv', '.webm', '.m4v'}
+
 
 EXTENSIONS_AUTORISEES = {
     ".mp4",
@@ -219,3 +223,75 @@ def telecharger_sortie(nom_fichier: str) -> FileResponse:
         chemin_sortie,
         filename=nom_sur,
     )
+
+
+
+@application.post("/api/taches/{identifiant_tache}/rendre")
+def rendre_tache(identifiant_tache: str) -> dict:
+    identifiant_sur = Path(identifiant_tache).stem
+    chemin_tache = TACHES / f"{identifiant_sur}.json"
+
+    if not chemin_tache.exists():
+        raise HTTPException(status_code=404, detail="Tache introuvable")
+
+    tache = json.loads(chemin_tache.read_text(encoding="utf-8"))
+
+    nom_stocke = Path(tache.get("nom_stocke", "")).name
+    chemin_entree = ENTREES / nom_stocke
+
+    if chemin_entree.suffix.lower() not in EXTENSIONS_VIDEO:
+        raise HTTPException(
+            status_code=400,
+            detail="Le rendu MP4 demande une video en entree",
+        )
+
+    sorties = tache.get("sorties") or {}
+    nom_ass = sorties.get("ass")
+
+    if not nom_ass:
+        raise HTTPException(
+            status_code=400,
+            detail="Sous-titres ASS absents. Execute la transcription avant le rendu.",
+        )
+
+    chemin_ass = SORTIES / Path(nom_ass).name
+
+    if not chemin_ass.exists():
+        raise HTTPException(status_code=404, detail="Fichier ASS introuvable")
+
+    base_sortie = f"{identifiant_sur}_{chemin_entree.stem}"
+    chemin_mp4 = SORTIES / f"{base_sortie}_sous_titres.mp4"
+
+    tache["etat"] = "en_cours"
+    tache["etape"] = "rendu_video"
+    tache["mis_a_jour_a"] = datetime.now(timezone.utc).isoformat()
+    chemin_tache.write_text(
+        json.dumps(tache, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    try:
+        rendre_video(
+            chemin_video=chemin_entree,
+            chemin_ass=chemin_ass,
+            chemin_sortie=chemin_mp4,
+        )
+
+        sorties["mp4"] = chemin_mp4.name
+        tache["sorties"] = sorties
+        tache["etat"] = "terminee"
+        tache["etape"] = "video_prete"
+        tache["mis_a_jour_a"] = datetime.now(timezone.utc).isoformat()
+
+    except Exception as erreur:
+        tache["etat"] = "erreur"
+        tache["etape"] = "rendu_erreur"
+        tache["erreur"] = str(erreur)
+        tache["mis_a_jour_a"] = datetime.now(timezone.utc).isoformat()
+
+    chemin_tache.write_text(
+        json.dumps(tache, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    return tache

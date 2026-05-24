@@ -18,3 +18,7 @@ donnees/taches/*
 !donnees/entrees/.gitkeep
 !donnees/sorties/.gitkeep
 !donnees/taches/.gitkeep
+
+# Forge Souveraine runtime logs/tests
+donnees/*.log
+donnees/test/

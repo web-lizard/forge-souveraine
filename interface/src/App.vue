@@ -126,9 +126,29 @@ async function lancerForge() {
       throw new Error(texteErreurExecution)
     }
 
-    const execution = await reponseExecution.json()
+    let execution = await reponseExecution.json()
     resultatExecution.value = execution
     resultatTache.value = execution
+
+    if (execution.etat === 'terminee' && entreeEstVideo(tache.nom_stocke)) {
+      journal.value =
+        'Transcription terminee. Rendu video en cours...' + "\n" +
+        'ASS: ' + execution.sorties.ass
+
+      const reponseRendu = await fetch(
+        adresseServeur + '/api/taches/' + tache.identifiant_tache + '/rendre',
+        { method: 'POST' }
+      )
+
+      if (!reponseRendu.ok) {
+        const texteErreurRendu = await reponseRendu.text()
+        throw new Error(texteErreurRendu)
+      }
+
+      execution = await reponseRendu.json()
+      resultatExecution.value = execution
+      resultatTache.value = execution
+    }
 
     if (execution.etat === 'terminee') {
       journal.value =
@@ -137,7 +157,7 @@ async function lancerForge() {
         'Langue detectee: ' + execution.langue_detectee + "\n" +
         'SRT: ' + execution.sorties.srt + "\n" +
         'ASS: ' + execution.sorties.ass + "\n" +
-        'JSON: ' + execution.sorties.json
+        'JSON: ' + execution.sorties.json + (execution.sorties.mp4 ? "\nMP4: " + execution.sorties.mp4 : '')
     } else {
       journal.value =
         'La tache est terminee avec probleme.' + "\n" +
@@ -151,6 +171,10 @@ async function lancerForge() {
   } finally {
     forgeEnCours.value = false
   }
+}
+
+function entreeEstVideo(nomFichier) {
+  return /\.(mp4|mov|mkv|webm|m4v)$/i.test(nomFichier || '')
 }
 
 function lienSortie(nomFichier) {
@@ -246,6 +270,7 @@ onMounted(() => {
         <a :href="lienSortie(resultatExecution.sorties.srt)" target="_blank">Telecharger SRT</a>
         <a :href="lienSortie(resultatExecution.sorties.ass)" target="_blank">Telecharger ASS</a>
         <a :href="lienSortie(resultatExecution.sorties.json)" target="_blank">Telecharger JSON</a>
+        <a v-if="resultatExecution.sorties.mp4" :href="lienSortie(resultatExecution.sorties.mp4)" target="_blank">Telecharger MP4</a>
       </div>
     </section>
 
