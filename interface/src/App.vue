@@ -5,7 +5,7 @@ const adresseServeur = 'http://127.0.0.1:8787'
 
 const langueInterface = ref('fr')
 const langue = ref('ru')
-const modele = ref('small')
+const modele = ref('medium')
 const styleSelectionne = ref('shorts_clean')
 const tiroir = ref('')
 const phase = ref('idle')
@@ -20,6 +20,7 @@ const resultatExecution = ref(null)
 const listeSorties = ref([])
 const dossierSorties = ref('')
 const exporterTechniques = ref(false)
+const exporterMontage = ref(true)
 const forgeEnCours = ref(false)
 const erreurInterface = ref('')
 const journal = ref('Forge Souveraine attend un fichier.')
@@ -60,7 +61,7 @@ const textes = {
     styleBig: 'Large lisible',
     styleRed: 'Rouge classique',
     styleSoft: 'Soft rounded',
-    qualiteNote: 'tiny est rapide mais faible. small est le defaut conseille. Les styles utilisent des polices systeme Windows.',
+    qualiteNote: 'medium est le defaut conseille pour une transcription correcte. large-v3 est plus lent, mais meilleur pour les videos importantes.',
     auto: 'Auto',
     russe: 'Russe',
     francais: 'Francais',
@@ -100,6 +101,10 @@ const textes = {
     actualiser: 'Actualiser',
     choisirDossier: 'Choisir dossier',
     exporterTechniques: 'Exporter aussi SRT, ASS et JSON',
+    exporterMontage: 'Exporter la carte de montage',
+    transcriptTxt: 'TRANSCRIPT TXT',
+    timelineCsv: 'TIMELINE CSV',
+    montageMd: 'MONTAGE MD',
     progression: 'Progression',
     historique: 'Historique',
     aucunHistorique: 'Aucun fichier encore.',
@@ -141,7 +146,7 @@ const textes = {
     styleBig: 'Крупный читаемый',
     styleRed: 'Красный классический',
     styleSoft: 'Мягкий округлый',
-    qualiteNote: 'tiny быстрый, но слабый. small теперь рекомендуемый дефолт. Стили используют системные шрифты Windows.',
+    qualiteNote: 'medium теперь рекомендуемый дефолт для приличной расшифровки. large-v3 медленнее, но лучше для важных видео.',
     auto: 'Авто',
     russe: 'Русский',
     francais: 'Французский',
@@ -181,6 +186,10 @@ const textes = {
     actualiser: 'Обновить',
     choisirDossier: 'Выбрать папку',
     exporterTechniques: 'Также сохранять SRT, ASS и JSON',
+    exporterMontage: 'Экспорт монтажной карты',
+    transcriptTxt: 'РАСШИФРОВКА TXT',
+    timelineCsv: 'ТАЙМЛАЙН CSV',
+    montageMd: 'МОНТАЖ MD',
     progression: 'Прогресс',
     historique: 'История',
     aucunHistorique: 'Пока файлов нет.',
@@ -282,6 +291,41 @@ async function chargerSorties() {
     dossierSorties.value = donnees.dossier || ''
   } catch (erreur) {
     journal.value = t('erreur') + ': ' + erreur.message
+  }
+}
+
+async function exporterTimeline(execution) {
+  if (!exporterMontage.value || !execution?.sorties?.json) {
+    return execution
+  }
+
+  try {
+    const reponse = await fetch(adresseServeur + '/api/export/timeline', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sorties: execution.sorties || {},
+        nom_original: fichierSelectionne.value?.name || ''
+      })
+    })
+
+    if (!reponse.ok) {
+      throw new Error('Timeline export HTTP ' + reponse.status)
+    }
+
+    const donnees = await reponse.json()
+    execution.sorties = {
+      ...(execution.sorties || {}),
+      ...(donnees.sorties || {})
+    }
+
+    listeSorties.value = donnees.fichiers || listeSorties.value
+    dossierSorties.value = donnees.dossier || dossierSorties.value
+
+    return execution
+  } catch (erreur) {
+    journal.value = t('erreur') + ': ' + erreur.message
+    return execution
   }
 }
 
@@ -566,6 +610,7 @@ async function forgerSousTitres() {
       }
 
       execution = await reponseRendu.json()
+      execution = await exporterTimeline(execution)
       execution = await finaliserSorties(execution)
       resultatExecution.value = execution
       resultatTache.value = execution
@@ -753,6 +798,7 @@ onMounted(() => {
           <option value="base">base, {{ t('equilibre') }}</option>
           <option value="small">small, {{ t('precis') }}</option>
           <option value="medium">medium, quality</option>
+          <option value="large-v3">large-v3, best slow</option>
         </select>
 
         <label>{{ t('style') }}</label>
@@ -763,6 +809,11 @@ onMounted(() => {
           <option value="shorts_red">{{ t('styleRed') }}</option>
           <option value="shorts_soft">{{ t('styleSoft') }}</option>
         </select>
+
+        <label class="check-row">
+          <input type="checkbox" v-model="exporterMontage" />
+          <span>{{ t('exporterMontage') }}</span>
+        </label>
 
         <label class="check-row">
           <input type="checkbox" v-model="exporterTechniques" />
@@ -787,6 +838,9 @@ onMounted(() => {
 
         <div v-if="resultatExecution?.sorties" class="downloads">
           <a v-if="resultatExecution.sorties.mp4" :href="lienSortie(resultatExecution.sorties.mp4)" target="_blank">{{ t('telechargerMp4') }}</a>
+          <a v-if="resultatExecution.sorties.transcript_txt" :href="lienSortie(resultatExecution.sorties.transcript_txt)" target="_blank">{{ t('transcriptTxt') }}</a>
+          <a v-if="resultatExecution.sorties.timeline_csv" :href="lienSortie(resultatExecution.sorties.timeline_csv)" target="_blank">{{ t('timelineCsv') }}</a>
+          <a v-if="resultatExecution.sorties.montage_md" :href="lienSortie(resultatExecution.sorties.montage_md)" target="_blank">{{ t('montageMd') }}</a>
           <a v-if="resultatExecution.sorties.srt" :href="lienSortie(resultatExecution.sorties.srt)" target="_blank">{{ t('telechargerSrt') }}</a>
           <a v-if="resultatExecution.sorties.ass" :href="lienSortie(resultatExecution.sorties.ass)" target="_blank">{{ t('telechargerAss') }}</a>
           <a v-if="resultatExecution.sorties.json" :href="lienSortie(resultatExecution.sorties.json)" target="_blank">{{ t('telechargerJson') }}</a>

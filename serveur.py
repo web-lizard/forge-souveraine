@@ -1,5 +1,5 @@
 import unicodedata
-﻿from pathlib import Path
+from pathlib import Path
 import os
 import subprocess
 import sys
@@ -99,6 +99,12 @@ class DemandeFinaliserSorties(BaseModel):
     sorties: dict = {}
     nom_original: str = ""
     exporter_techniques: bool = False
+
+
+
+class DemandeExporterTimeline(BaseModel):
+    sorties: dict = {}
+    nom_original: str = ""
 
 
 @application.get("/api/sante")
@@ -403,6 +409,12 @@ def finaliser_sorties_apres_rendu(sorties: dict, nom_original: str, exporter_tec
             resultat["mp4"] = destination.name
             continue
 
+        if extension in {".md", ".csv", ".txt"}:
+            destination = chemin_unique(SORTIES, f"{base_finale}{extension}")
+            chemin.replace(destination)
+            resultat[cle] = destination.name
+            continue
+
         if exporter_techniques:
             destination = chemin_unique(SORTIES, f"{base_finale}{extension}")
             chemin.replace(destination)
@@ -430,7 +442,7 @@ def lister_sorties(inclure_techniques: bool = False) -> dict:
 
         extension = chemin.suffix.lower().lstrip(".")
 
-        if not inclure_techniques and extension != "mp4":
+        if not inclure_techniques and extension not in {"mp4", "md", "csv", "txt"}:
             continue
 
         stat = chemin.stat()
@@ -517,4 +529,38 @@ def finaliser_sorties(demande: DemandeFinaliserSorties) -> dict:
         "dossier": str(obtenir_dossier_sorties()),
         "sorties": sorties,
         "fichiers": lister_sorties(inclure_techniques=demande.exporter_techniques)["fichiers"],
+    }
+
+
+
+@application.post("/api/export/timeline")
+def exporter_timeline(demande: DemandeExporterTimeline) -> dict:
+    from noyau.export_timeline import exporter_timeline_depuis_json
+
+    dossier = obtenir_dossier_sorties() if "obtenir_dossier_sorties" in globals() else SORTIES
+    dossier.mkdir(parents=True, exist_ok=True)
+
+    nom_json = (demande.sorties or {}).get("json")
+
+    if not nom_json:
+        raise HTTPException(status_code=400, detail="JSON output is required for timeline export")
+
+    chemin_json = dossier / str(nom_json)
+
+    if not chemin_json.exists():
+        raise HTTPException(status_code=404, detail=f"JSON output not found: {nom_json}")
+
+    sorties = exporter_timeline_depuis_json(
+        chemin_json=chemin_json,
+        dossier_sorties=dossier,
+        nom_original=demande.nom_original or nom_json,
+    )
+
+    fichiers = lister_sorties(inclure_techniques=True)["fichiers"] if "lister_sorties" in globals() else []
+
+    return {
+        "ok": True,
+        "dossier": str(dossier),
+        "sorties": sorties,
+        "fichiers": fichiers,
     }

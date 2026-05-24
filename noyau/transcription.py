@@ -1,8 +1,24 @@
-﻿from pathlib import Path
+from pathlib import Path
 from typing import Optional
 
 from faster_whisper import WhisperModel
 
+
+INVITE_TRANSCRIPTION_RU = (
+    "Это расшифровка русской разговорной речи для короткого видео. "
+    "Сохраняй смысл фразы, не заменяй редкие слова похожими бытовыми словами. "
+    "Возможные термины: эзотерическом, эзотерический, эзотерика, эзотерические, "
+    "символические системы, символическая система, саламандра, саламандру, "
+    "магазин, магазинчик, цветы, растения. "
+    "Если слышится слово эзотерическом, пиши именно эзотерическом, а не италлическом."
+)
+
+
+def construire_invite_transcription(langue: str | None) -> str | None:
+    if not langue or str(langue).lower() in {"auto", "ru", "russian", "rus"}:
+        return INVITE_TRANSCRIPTION_RU
+
+    return None
 
 CACHE_MODELES = {}
 
@@ -39,8 +55,17 @@ def transcrire_fichier(
     segments_bruts, info = moteur.transcribe(
         str(chemin_entree),
         language=langue_preparee,
+        beam_size=7,
+        best_of=7,
+        patience=1.15,
+        temperature=0.0,
+        compression_ratio_threshold=2.4,
+        log_prob_threshold=-1.0,
+        no_speech_threshold=0.55,
+        condition_on_previous_text=True,
+        initial_prompt=construire_invite_transcription(locals().get('langue')),
         vad_filter=True,
-        beam_size=5,
+        vad_parameters={"min_silence_duration_ms": 450, "speech_pad_ms": 250},
     )
 
     segments = []
