@@ -45,7 +45,7 @@ class DemandeTache(BaseModel):
     nom_stocke: str
     langue: str = "auto"
     modele: str = "base"
-    style: str = "imperial"
+    style: str = "shorts_clean"
 
 
 application = FastAPI(title="Forge Souveraine")
@@ -184,8 +184,8 @@ def executer_tache(identifiant_tache: str) -> dict:
             json.dumps(resultat, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-        ecrire_srt(resultat["segments"], chemin_srt)
-        ecrire_ass(resultat["segments"], chemin_ass)
+        ecrire_srt(resultat["segments"], chemin_srt, (locals().get('tache') or locals().get('donnees_tache') or locals().get('tache_donnees') or {}).get('style', 'shorts_clean'))
+        ecrire_ass(resultat["segments"], chemin_ass, (locals().get('tache') or locals().get('donnees_tache') or locals().get('tache_donnees') or {}).get('style', 'shorts_clean'))
 
         tache["etat"] = "terminee"
         tache["etape"] = "sorties_pretes"

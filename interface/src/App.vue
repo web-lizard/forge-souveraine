@@ -5,8 +5,8 @@ const adresseServeur = 'http://127.0.0.1:8787'
 
 const langueInterface = ref('fr')
 const langue = ref('ru')
-const modele = ref('tiny')
-const styleSelectionne = ref('imperial')
+const modele = ref('small')
+const styleSelectionne = ref('shorts_clean')
 const tiroir = ref('')
 const phase = ref('idle')
 const survolDepot = ref(false)
@@ -53,7 +53,12 @@ const textes = {
     langueAudio: 'Langue audio',
     interface: 'Interface',
     modele: 'Modele Whisper',
-    style: 'Style',
+    style: 'Style des sous-titres',
+    styleClean: 'Shorts clean',
+    styleGold: 'Imperial gold',
+    styleBig: 'Large lisible',
+    styleRed: 'Rouge classique',
+    qualiteNote: 'tiny est rapide mais faible. small est le defaut conseille.',
     auto: 'Auto',
     russe: 'Russe',
     francais: 'Francais',
@@ -125,7 +130,12 @@ const textes = {
     langueAudio: 'Язык аудио',
     interface: 'Интерфейс',
     modele: 'Модель Whisper',
-    style: 'Стиль',
+    style: 'Стиль субтитров',
+    styleClean: 'Чистый Shorts',
+    styleGold: 'Имперское золото',
+    styleBig: 'Крупный читаемый',
+    styleRed: 'Красный классический',
+    qualiteNote: 'tiny быстрый, но слабый. small теперь рекомендуемый дефолт.',
     auto: 'Авто',
     russe: 'Русский',
     francais: 'Французский',
@@ -662,14 +672,19 @@ onMounted(() => {
           <option value="tiny">tiny, {{ t('rapide') }}</option>
           <option value="base">base, {{ t('equilibre') }}</option>
           <option value="small">small, {{ t('precis') }}</option>
+          <option value="medium">medium, quality</option>
         </select>
 
         <label>{{ t('style') }}</label>
         <select v-model="styleSelectionne">
-          <option value="imperial">{{ t('imperial') }}</option>
+          <option value="shorts_clean">{{ t('styleClean') }}</option>
+          <option value="shorts_gold">{{ t('styleGold') }}</option>
+          <option value="shorts_big">{{ t('styleBig') }}</option>
+          <option value="shorts_red">{{ t('styleRed') }}</option>
         </select>
 
         <p class="note">{{ t('local') }}</p>
+        <p class="note">{{ t('qualiteNote') }}</p>
       </section>
 
       <section v-else-if="tiroir === 'resultats'" class="panneau">
