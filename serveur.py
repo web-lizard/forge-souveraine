@@ -1,3 +1,4 @@
+import unicodedata
 ﻿from pathlib import Path
 import os
 import subprocess
@@ -20,7 +21,38 @@ from noyau.rendu import rendre_video
 RACINE = Path(__file__).resolve().parent
 DONNEES = RACINE / "donnees"
 ENTREES = DONNEES / "entrees"
-SORTIES = Path(os.environ.get("FORGE_SORTIES_DIR", r"D:\ForgeSouveraine\sorties"))
+CONFIGURATION = DONNEES / "configuration.json"
+
+
+def lire_configuration() -> dict:
+    if not CONFIGURATION.exists():
+        return {}
+
+    try:
+        return json.loads(CONFIGURATION.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def ecrire_configuration(configuration: dict) -> None:
+    CONFIGURATION.parent.mkdir(parents=True, exist_ok=True)
+    CONFIGURATION.write_text(
+        json.dumps(configuration, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def obtenir_dossier_sorties() -> Path:
+    configuration = lire_configuration()
+    valeur = (
+        os.environ.get("FORGE_SORTIES_DIR")
+        or configuration.get("dossier_sorties")
+        or r"D:\ForgeSouveraine\sorties"
+    )
+
+    return Path(valeur)
+
+SORTIES = obtenir_dossier_sorties()
 TACHES = DONNEES / "taches"
 
 EXTENSIONS_VIDEO = {'.mp4', '.mov', '.mkv', '.webm', '.m4v'}
@@ -60,6 +92,13 @@ application.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+
+class DemandeFinaliserSorties(BaseModel):
+    sorties: dict = {}
+    nom_original: str = ""
+    exporter_techniques: bool = False
 
 
 @application.get("/api/sante")
@@ -301,8 +340,86 @@ def rendre_tache(identifiant_tache: str) -> dict:
 
 
 
+
+def nettoyer_nom_lisible(valeur: str, defaut: str = "video") -> str:
+    brut = Path(str(valeur or "")).stem
+    brut = unicodedata.normalize("NFKC", brut)
+    brut = re.sub(r"[^\wа-яА-ЯёЁ.-]+", "_", brut, flags=re.UNICODE)
+    brut = re.sub(r"_+", "_", brut).strip("._-")
+
+    if not brut:
+        brut = defaut
+
+    return brut[:72]
+
+
+def chemin_unique(dossier: Path, nom: str) -> Path:
+    candidat = dossier / nom
+
+    if not candidat.exists():
+        return candidat
+
+    base = candidat.stem
+    suffixe = candidat.suffix
+
+    for index in range(2, 1000):
+        candidat_indexe = dossier / f"{base}_{index}{suffixe}"
+
+        if not candidat_indexe.exists():
+            return candidat_indexe
+
+    return dossier / f"{base}_{datetime.now().strftime('%H%M%S')}{suffixe}"
+
+
+def finaliser_sorties_apres_rendu(sorties: dict, nom_original: str, exporter_techniques: bool = False) -> dict:
+    global SORTIES
+
+    SORTIES = obtenir_dossier_sorties()
+    SORTIES.mkdir(parents=True, exist_ok=True)
+
+    if not isinstance(sorties, dict):
+        return {}
+
+    base = nettoyer_nom_lisible(nom_original)
+    horodatage = datetime.now().strftime("%Y%m%d_%H%M%S")
+    base_finale = f"{horodatage}_{base}"
+
+    resultat = {}
+
+    for cle, nom in list(sorties.items()):
+        if not nom:
+            continue
+
+        chemin = SORTIES / str(nom)
+
+        if not chemin.exists() or not chemin.is_file():
+            continue
+
+        extension = chemin.suffix.lower()
+
+        if extension == ".mp4" or cle == "mp4":
+            destination = chemin_unique(SORTIES, f"{base_finale}.mp4")
+            chemin.replace(destination)
+            resultat["mp4"] = destination.name
+            continue
+
+        if exporter_techniques:
+            destination = chemin_unique(SORTIES, f"{base_finale}{extension}")
+            chemin.replace(destination)
+            resultat[cle] = destination.name
+        else:
+            try:
+                chemin.unlink()
+            except Exception:
+                pass
+
+    return resultat
+
+
 @application.get("/api/sorties")
-def lister_sorties() -> dict:
+def lister_sorties(inclure_techniques: bool = False) -> dict:
+    global SORTIES
+    SORTIES = obtenir_dossier_sorties()
     fichiers = []
 
     SORTIES.mkdir(parents=True, exist_ok=True)
@@ -311,12 +428,17 @@ def lister_sorties() -> dict:
         if not chemin.is_file():
             continue
 
+        extension = chemin.suffix.lower().lstrip(".")
+
+        if not inclure_techniques and extension != "mp4":
+            continue
+
         stat = chemin.stat()
 
         fichiers.append(
             {
                 "nom": chemin.name,
-                "extension": chemin.suffix.lower().lstrip("."),
+                "extension": extension,
                 "taille_octets": stat.st_size,
                 "modifie_a": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
             }
@@ -343,4 +465,56 @@ def ouvrir_dossier_sorties() -> dict:
     return {
         "ok": True,
         "dossier": str(SORTIES),
+    }
+
+
+
+@application.post("/api/sorties/choisir")
+def choisir_dossier_sorties() -> dict:
+    global SORTIES
+
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+
+        racine = tk.Tk()
+        racine.withdraw()
+        racine.attributes("-topmost", True)
+
+        dossier = filedialog.askdirectory(
+            title="Выбрать папку результатов Forge Souveraine",
+            initialdir=str(obtenir_dossier_sorties()),
+        )
+
+        racine.destroy()
+    except Exception as erreur:
+        raise HTTPException(status_code=500, detail=f"Folder picker failed: {erreur}")
+
+    if not dossier:
+        return lister_sorties()
+
+    configuration = lire_configuration()
+    configuration["dossier_sorties"] = dossier
+    ecrire_configuration(configuration)
+
+    SORTIES = Path(dossier)
+    SORTIES.mkdir(parents=True, exist_ok=True)
+
+    return lister_sorties()
+
+
+
+@application.post("/api/sorties/finaliser")
+def finaliser_sorties(demande: DemandeFinaliserSorties) -> dict:
+    sorties = finaliser_sorties_apres_rendu(
+        sorties=demande.sorties,
+        nom_original=demande.nom_original,
+        exporter_techniques=demande.exporter_techniques,
+    )
+
+    return {
+        "ok": True,
+        "dossier": str(obtenir_dossier_sorties()),
+        "sorties": sorties,
+        "fichiers": lister_sorties(inclure_techniques=demande.exporter_techniques)["fichiers"],
     }

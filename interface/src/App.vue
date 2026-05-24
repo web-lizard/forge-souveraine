@@ -19,6 +19,7 @@ const resultatTache = ref(null)
 const resultatExecution = ref(null)
 const listeSorties = ref([])
 const dossierSorties = ref('')
+const exporterTechniques = ref(false)
 const forgeEnCours = ref(false)
 const erreurInterface = ref('')
 const journal = ref('Forge Souveraine attend un fichier.')
@@ -97,6 +98,9 @@ const textes = {
     dossierSorties: 'Dossier de sortie',
     ouvrirDossier: 'Ouvrir le dossier',
     actualiser: 'Actualiser',
+    choisirDossier: 'Choisir dossier',
+    exporterTechniques: 'Exporter aussi SRT, ASS et JSON',
+    progression: 'Progression',
     historique: 'Historique',
     aucunHistorique: 'Aucun fichier encore.',
     ouvrir: 'Ouvrir',
@@ -175,6 +179,9 @@ const textes = {
     dossierSorties: 'Папка результатов',
     ouvrirDossier: 'Открыть папку',
     actualiser: 'Обновить',
+    choisirDossier: 'Выбрать папку',
+    exporterTechniques: 'Также сохранять SRT, ASS и JSON',
+    progression: 'Прогресс',
     historique: 'История',
     aucunHistorique: 'Пока файлов нет.',
     ouvrir: 'Открыть',
@@ -219,6 +226,27 @@ const megaIndice = computed(() => {
   return t('megaHintIdle')
 })
 
+const progressionForge = computed(() => {
+  if (phase.value === 'upload') return 14
+  if (phase.value === 'tache') return 24
+  if (phase.value === 'transcription') return 62
+  if (phase.value === 'rendu') return 86
+  if (phase.value === 'done') return 100
+  if (phase.value === 'error') return 100
+  if (phase.value === 'ready') return 7
+  return 0
+})
+
+const libelleProgression = computed(() => {
+  if (phase.value === 'upload') return t('upload')
+  if (phase.value === 'tache') return t('tache')
+  if (phase.value === 'transcription') return t('transcription')
+  if (phase.value === 'rendu') return t('rendu')
+  if (phase.value === 'done') return t('fait')
+  if (phase.value === 'error') return t('erreur')
+  return t('attente')
+})
+
 function formatOctets(octets) {
   if (!octets) return '0 B'
   const unites = ['B', 'KB', 'MB', 'GB']
@@ -243,7 +271,7 @@ function lienSortie(nomFichierSortie) {
 
 async function chargerSorties() {
   try {
-    const reponse = await fetch(adresseServeur + '/api/sorties')
+    const reponse = await fetch(adresseServeur + '/api/sorties?inclure_techniques=' + (exporterTechniques.value ? 'true' : 'false'))
 
     if (!reponse.ok) {
       throw new Error('Sorties HTTP ' + reponse.status)
@@ -270,6 +298,52 @@ async function ouvrirDossierSorties() {
     await chargerSorties()
   } catch (erreur) {
     journal.value = t('erreur') + ': ' + erreur.message
+  }
+}
+
+async function choisirDossierSorties() {
+  try {
+    const reponse = await fetch(adresseServeur + '/api/sorties/choisir', {
+      method: 'POST'
+    })
+
+    if (!reponse.ok) {
+      throw new Error('Choose folder HTTP ' + reponse.status)
+    }
+
+    const donnees = await reponse.json()
+    listeSorties.value = donnees.fichiers || []
+    dossierSorties.value = donnees.dossier || ''
+  } catch (erreur) {
+    journal.value = t('erreur') + ': ' + erreur.message
+  }
+}
+
+async function finaliserSorties(execution) {
+  try {
+    const reponse = await fetch(adresseServeur + '/api/sorties/finaliser', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sorties: execution?.sorties || {},
+        nom_original: fichierSelectionne.value?.name || '',
+        exporter_techniques: exporterTechniques.value
+      })
+    })
+
+    if (!reponse.ok) {
+      throw new Error('Finalize outputs HTTP ' + reponse.status)
+    }
+
+    const donnees = await reponse.json()
+    listeSorties.value = donnees.fichiers || []
+    dossierSorties.value = donnees.dossier || ''
+    execution.sorties = donnees.sorties || {}
+
+    return execution
+  } catch (erreur) {
+    journal.value = t('erreur') + ': ' + erreur.message
+    return execution
   }
 }
 
@@ -492,6 +566,7 @@ async function forgerSousTitres() {
       }
 
       execution = await reponseRendu.json()
+      execution = await finaliserSorties(execution)
       resultatExecution.value = execution
       resultatTache.value = execution
     }
@@ -594,12 +669,15 @@ onMounted(() => {
           <span class="satellite s3"></span>
         </div>
 
-        <button class="mega" :class="[etatMega, phase]" type="button" :disabled="forgeEnCours && etatMega !== 'work'" @click="clickMega">
+        <button class="mega" :class="[etatMega, phase]" type="button" :style="{ '--progres': progressionForge + '%' }" :disabled="forgeEnCours && etatMega !== 'work'" @click="clickMega">
           <span class="mega-glow"></span>
           <span class="mega-core">
             <small>{{ t('pret') }}</small>
             <strong>{{ megaTexte }}</strong>
             <em>{{ megaIndice }}</em>
+            <span class="progression-label" v-if="forgeEnCours || phase === 'done'">
+              {{ progressionForge }}% · {{ libelleProgression }}
+            </span>
           </span>
         </button>
 
@@ -686,6 +764,11 @@ onMounted(() => {
           <option value="shorts_soft">{{ t('styleSoft') }}</option>
         </select>
 
+        <label class="check-row">
+          <input type="checkbox" v-model="exporterTechniques" />
+          <span>{{ t('exporterTechniques') }}</span>
+        </label>
+
         <p class="note">{{ t('local') }}</p>
         <p class="note">{{ t('qualiteNote') }}</p>
       </section>
@@ -693,6 +776,7 @@ onMounted(() => {
       <section v-else-if="tiroir === 'resultats'" class="panneau">
         <div class="sorties-actions">
           <button type="button" @click="ouvrirDossierSorties">{{ t('ouvrirDossier') }}</button>
+          <button type="button" @click="choisirDossierSorties">{{ t('choisirDossier') }}</button>
           <button type="button" @click="chargerSorties">{{ t('actualiser') }}</button>
         </div>
 
@@ -702,10 +786,10 @@ onMounted(() => {
         </div>
 
         <div v-if="resultatExecution?.sorties" class="downloads">
-          <a :href="lienSortie(resultatExecution.sorties.srt)" target="_blank">{{ t('telechargerSrt') }}</a>
-          <a :href="lienSortie(resultatExecution.sorties.ass)" target="_blank">{{ t('telechargerAss') }}</a>
-          <a :href="lienSortie(resultatExecution.sorties.json)" target="_blank">{{ t('telechargerJson') }}</a>
           <a v-if="resultatExecution.sorties.mp4" :href="lienSortie(resultatExecution.sorties.mp4)" target="_blank">{{ t('telechargerMp4') }}</a>
+          <a v-if="resultatExecution.sorties.srt" :href="lienSortie(resultatExecution.sorties.srt)" target="_blank">{{ t('telechargerSrt') }}</a>
+          <a v-if="resultatExecution.sorties.ass" :href="lienSortie(resultatExecution.sorties.ass)" target="_blank">{{ t('telechargerAss') }}</a>
+          <a v-if="resultatExecution.sorties.json" :href="lienSortie(resultatExecution.sorties.json)" target="_blank">{{ t('telechargerJson') }}</a>
         </div>
 
         <p v-else class="note">{{ t('aucunResultat') }}</p>
@@ -1437,7 +1521,7 @@ pre {
 
 .sorties-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 10px;
   margin-bottom: 12px;
 }
@@ -1500,6 +1584,56 @@ pre {
   color: #9fb79e;
   font-size: 12px;
   font-weight: 850;
+}
+
+
+.mega.work,
+.mega.upload,
+.mega.tache,
+.mega.transcription,
+.mega.rendu {
+  background:
+    conic-gradient(from 180deg, #d6b218 0 var(--progres, 0%), #7dffb2 var(--progres, 0%) calc(var(--progres, 0%) + 8%), #123d22 calc(var(--progres, 0%) + 8%) 100%);
+}
+
+.progression-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 138px;
+  border: 1px solid rgba(125, 255, 178, 0.28);
+  border-radius: 999px;
+  padding: 7px 12px;
+  color: #041107;
+  background: linear-gradient(135deg, #d6b218, #7dffb2);
+  box-shadow: 0 0 34px rgba(125, 255, 178, 0.16);
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 1000;
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  border: 1px solid rgba(125, 255, 178, 0.14);
+  border-radius: 16px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+}
+
+.check-row input {
+  width: 18px;
+  height: 18px;
+  accent-color: #d6b218;
+}
+
+.check-row span {
+  color: #d9edc8;
+  font-size: 13px;
+  font-weight: 900;
 }
 
 @keyframes spin {
